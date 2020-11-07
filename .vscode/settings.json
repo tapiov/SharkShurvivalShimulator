@@ -1,0 +1,9 @@
+{
+    "Lua.diagnostics.globals": [
+        "game",
+        "CFrame",
+        "Instance",
+        "Vector3",
+        "workspace"
+    ]
+}
