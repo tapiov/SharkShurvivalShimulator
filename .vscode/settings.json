@@ -4,6 +4,7 @@
         "CFrame",
         "Instance",
         "Vector3",
-        "workspace"
+        "workspace",
+        "wait"
     ]
 }

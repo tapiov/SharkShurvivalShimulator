@@ -8,6 +8,19 @@ local players = {}
 
 -- Local functions
 
+-- This function is called once when a player character respawns
+local function onCharacterSpawn(character)
+
+	print(player.Name .. " joined.")
+	local char = player.Character
+
+	if not char then
+		char = player.CharacterAdded:wait()
+		player.CharacterAdded(onCharacterSpawn)
+	end
+	players[player] = char
+end
+
 -- This function is called once for all Player objects
 local function onPlayerAdded(player)
 	print(player.Name .. " joined.")
@@ -15,6 +28,7 @@ local function onPlayerAdded(player)
 
 	if not char then
 		char = player.CharacterAdded:wait()
+		--player.CharacterAdded(onCharacterSpawn)
 	end
 	players[player] = char
 end
@@ -22,15 +36,6 @@ end
 -- Print pretty V3s
 local function prettyPrintV3(v3)
 	return (" X = " .. math.floor(v3.X) .. " Y = " .. math.floor(v3.Y) .. " Z = " .. math.floor(v3.Z))
-end
-
-local function characterPos(player)
-	local char = player.Character
-	if not char then
-		char = player.CharacterAdded:wait()
-	end
-	local pos = char.HumanoidRootPart.Position
-	print("Player " .. player.Name .. " is at " .. prettyPrintV3(pos))
 end
 
 local function findDistance(start, destination)
@@ -92,49 +97,39 @@ local function findPath(start, destination)
 	return path
 end
 
-local function moveShark(player, sharkPart)
-	local char = player.Character
-	print("Shark is at " .. sharkPart.Position.X .. " " .. sharkPart.Position.Y .. " " .. sharkPart.Position.Z)
+local function thrustShark(sharkPart, dirShark, turnPercentage, riseFallPercentage, thrustForce, thrustDuration)
 
-	-- Solving for shark head location, i.e weightFront front side
-	-- Thrust part is 3 x 1 x 18
-	local CenterOfSharkHeadFaceCF = sharkPart.CFrame + Vector3.new(0, 0, -18 / 2)
+	local thrust = dirShark.Unit * thrustForce
 
-	local plrCF = char.HumanoidRootPart.CFrame
+	-- X component will be capped with turnPercentage of Z
+	local thrustX = thrust.X
 
-	-- Relative to shark
-	-- local dirCF = wrldSpaceCenterOfSharkHeadCF:ToObjectSpace(plrCF)
-	local dirCF = plrCF:ToObjectSpace(CenterOfSharkHeadFaceCF)
+	if (math.abs(thrustX) > turnPercentage * math.abs(thrust.Z)) then
+		thrustX = turnPercentage * math.sign(thrustX) * math.abs(thrust.Z)
+	end
 
-	-- Create direction vector from player to shark mouth
-	-- local dir = char.HumanoidRootPart.Position - wrldSpaceCenterOfSharkHeadCF.Position
-	local dir = dirCF.Position
+	-- Y component will be capped with riseFallPercentage of Z
+	local thrustY = thrust.Y
 
-	-- Direction vector determines the body thrust vector direction on weight part
-	-- Thrust surface is 3 x 1
-	print("Direction vector is " .. dir.X .. " " .. dir.Y .. " " .. dir.Z)
+	if (math.abs(thrustY) > riseFallPercentage * math.abs(thrust.Z)) then
+		thrustY = riseFallPercentage * math.sign(thrustY) * math.abs(thrust.Z)
+	end
 
-	-- Vector lenght
-	local dirLen = math.sqrt((dir.X) ^ 2 + (dir.Z) ^ 2)
+	-- Z component is calculated with X, Y and thrustForce
+	local thrustZ = math.sqrt(thrustForce ^ 2 - thrustX ^ 2)
 
-	-- Component ratios
-	local ratioX = dir.X / dirLen
-	local ratioZ = dir.Z / dirLen
-
-	-- local thrustLocation = CFrame.new():ToObjectSpace(wrldSpaceCenterOfSharkHeadCF).Position
+	-- Compose final force vector
+	local finalThrustForce = Vector3.new(thrustX, 0 * thrustY, -1 * thrustZ)
+	print("Final thrust vector is " .. prettyPrintV3(finalThrustForce))
 
 	local thrustLocation = Vector3.new(0, 0, -18 / 2)
-	local thrustForce = Vector3.new(10000 * (1 / dir.X), 0.0 * dir.Y, -100000 * (1 / dir.Z))
 
 	sharkPart.BodyThrust.Location = thrustLocation
-	sharkPart.BodyThrust.Force = thrustForce
-	print("Pushing ... force = " .. math.floor(thrustForce.X) .. " " .. thrustForce.Y .. " " .. math.floor(thrustForce.Z))
+	sharkPart.BodyThrust.Force = finalThrustForce
 
-	-- And move the shark
+	wait(thrustDuration)
 
-	-- print(sharkmouth.CFrame.Position)
-	-- sharkmouth.CFrame = sharkmouth.CFrame + move
-	-- print(sharkmouth.CFrame.Position)
+	print("Thrusting ... ")
 end
 
 local function nullGravity(part)
@@ -156,13 +151,14 @@ Players.PlayerAdded:Connect(onPlayerAdded)
 
 -- Variables for the shark and player
 local sharkModel = workspace:FindFirstChild("RealShark")
-local sharkPart, bodyThrust
+local sharkPart, bodyThrust, rocketPropulsion
 
 for i, d in pairs(sharkModel:GetDescendants()) do
 	print(d.Name)
 	if (d.Name == "WeightFront") then
 		sharkPart = d
 		bodyThrust = sharkPart.BodyThrust
+		rocketPropulsion = sharkPart.RocketPropulsion
 	end
 end
 
@@ -170,19 +166,30 @@ end
 local thrustForce = 50000
 local turnPercentage = 0.005
 local riseFallPercentage = 0.01
+local thrustDuration = 0.1
 
 -- Create a list of players
 for _, player in pairs(Players:GetPlayers()) do
 	onPlayerAdded(player)
 end
+
+local function onTouched(Obj)
+	local h = Obj.Parent:FindFirstChild("Humanoid")
+	if h then
+		h.Health = 0
+		players[Obj] = nil
+	end
+end
+
+-- Events
 Players.PlayerAdded:Connect(onPlayerAdded)
+sharkPart.Touched:Connect(onTouched)
 
 -- Game loop
 while true do
 	for p, c in pairs(players) do
 		print("Looking at player " .. p.Name)
 		if (p ~= nil) then
-			characterPos(p)
 
 			-- Turn and move shark towards the player
 			-- moveShark(player, sharkPart)
@@ -196,9 +203,19 @@ while true do
 			print("Shark is at " .. prettyPrintV3(sharkHeadCF.Position))
 			print("The distance is " .. dist)
 
+			local dirWorld = plrCF.Position - sharkHeadCF.Position
+			local dirShark = sharkHeadCF:VectorToObjectSpace(dirWorld)
+
 			if (dist < 20) then
 				-- Close enough to attack, calculate path to player
-				local path = findPath(sharkHeadCF.Position, plrCF.Position)
+				-- local path = findPath(sharkHeadCF.Position, plrCF.Position)
+				rocketPropulsion.Target = c.HumanoidRootPart
+				rocketPropulsion.CartoonFactor = 0.7
+				rocketPropulsion.TargetOffset = Vector3.new(0,0,0)
+				rocketPropulsion.TargetRadius = 4
+				rocketPropulsion:Fire()
+				wait(0.1)
+				rocketPropulsion:Abort()
 
 			elseif (dist < 100) then
 				-- Start closing distance faster
@@ -206,6 +223,8 @@ while true do
 				thrustForce = 50000
 				turnPercentage = 0.005
 				riseFallPercentage = 0.01
+				thrustDuration = 0.1
+				thrustShark(sharkPart, dirShark, turnPercentage, riseFallPercentage, thrustForce, thrustDuration)
 
 			
 			elseif (dist < 300) then
@@ -213,52 +232,17 @@ while true do
 				thrustForce = 20000
 				turnPercentage = 0.01
 				riseFallPercentage = 0.01
+				thrustDuration = 0.5
+				thrustShark(sharkPart, dirShark, turnPercentage, riseFallPercentage, thrustForce, thrustDuration)
+
 			else 
-				-- Set random course, slow cruise
-
+				-- Turn around 
+				thrustForce = 5000
+				turnPercentage = 1
+				riseFallPercentage = 1
+				thrustDuration = 0.1
+				thrustShark(sharkPart, dirShark, turnPercentage, riseFallPercentage, thrustForce, thrustDuration)
 			end
-
-
-			local dirWorld = plrCF.Position - sharkHeadCF.Position
-			local dirShark = sharkHeadCF:VectorToObjectSpace(dirWorld)
-
-			local thrust = dirShark.Unit * thrustForce
-
-			-- X component will be capped with turnPercentage of Z
-			local thrustX = thrust.X
-
-			if (math.abs(thrustX) > turnPercentage * math.abs(thrust.Z)) then
-				thrustX = turnPercentage * math.sign(thrustX) * math.abs(thrust.Z)
-			end
-
-			-- Y component will be capped with riseFallPercentage of Z
-			local thrustY = thrust.Y
-
-			if (math.abs(thrustY) > riseFallPercentage * math.abs(thrust.Z)) then
-				thrustY = riseFallPercentage * math.sign(thrustY) * math.abs(thrust.Z)
-			end
-
-			-- Z component is calculated with X, Y and thrustForce
-			local thrustZ = math.sqrt(thrustForce ^ 2 - thrustX ^ 2)
-
-			-- Compose final force vector
-			local finalThrustForce = Vector3.new(thrustX, 0 * thrustY, -1 * thrustZ)
-			print("Final thrust vector is " .. prettyPrintV3(finalThrustForce))
-
-			local thrustLocation = Vector3.new(0, 0, -18 / 2)
-
-			sharkPart.BodyThrust.Location = thrustLocation
-			sharkPart.BodyThrust.Force = finalThrustForce
-
-			print("Pushing ... ")
-		--wait(1)
-
-		--local thrustForce = Vector3.new(0, 0, 0)
-
-		-- sharkPart.BodyThrust.Location = thrustLocation
-		-- sharkPart.BodyThrust.Force = thrustForce
-
-		-- wait(1)
 		end
 		--wait(1)
 	end
