@@ -8,27 +8,33 @@ local players = {}
 
 -- Local functions
 
+local function Players()
+	local i = 1
+	for p, c in pairs(players) do
+		print(i .. ": Player : " .. p.Name .. " Character : " .. c.Name)
+	end
+end
+
 -- This function is called once when a player character respawns
 local function onCharacterSpawn(character)
+	print(character)
 
-	print(player.Name .. " joined.")
-	local char = player.Character
+	local player = Players:GetPlayerFromCharacter(character)
 
-	if not char then
-		char = player.CharacterAdded:wait()
-		player.CharacterAdded(onCharacterSpawn)
-	end
-	players[player] = char
+	print(player.Name .. " respawned")
+	players[player] = character
+
+	listPlayers()
 end
 
 -- This function is called once for all Player objects
 local function onPlayerAdded(player)
-	print(player.Name .. " joined.")
+	print(player.Name .. " joined")
 	local char = player.Character
 
 	if not char then
 		char = player.CharacterAdded:wait()
-		--player.CharacterAdded(onCharacterSpawn)
+		player.CharacterAdded:Connect(onCharacterSpawn)
 	end
 	players[player] = char
 end
@@ -98,7 +104,6 @@ local function findPath(start, destination)
 end
 
 local function thrustShark(sharkPart, dirShark, turnPercentage, riseFallPercentage, thrustForce, thrustDuration)
-
 	local thrust = dirShark.Unit * thrustForce
 
 	-- X component will be capped with turnPercentage of Z
@@ -190,7 +195,6 @@ while true do
 	for p, c in pairs(players) do
 		print("Looking at player " .. p.Name)
 		if (p ~= nil) then
-
 			-- Turn and move shark towards the player
 			-- moveShark(player, sharkPart)
 
@@ -211,12 +215,11 @@ while true do
 				-- local path = findPath(sharkHeadCF.Position, plrCF.Position)
 				rocketPropulsion.Target = c.HumanoidRootPart
 				rocketPropulsion.CartoonFactor = 0.7
-				rocketPropulsion.TargetOffset = Vector3.new(0,0,0)
+				rocketPropulsion.TargetOffset = Vector3.new(0, 0, 0)
 				rocketPropulsion.TargetRadius = 4
 				rocketPropulsion:Fire()
 				wait(0.1)
 				rocketPropulsion:Abort()
-
 			elseif (dist < 100) then
 				-- Start closing distance faster
 				-- Initial Thrust properties
@@ -225,8 +228,6 @@ while true do
 				riseFallPercentage = 0.01
 				thrustDuration = 0.1
 				thrustShark(sharkPart, dirShark, turnPercentage, riseFallPercentage, thrustForce, thrustDuration)
-
-			
 			elseif (dist < 300) then
 				-- Start closing distance slowly
 				thrustForce = 20000
@@ -234,9 +235,8 @@ while true do
 				riseFallPercentage = 0.01
 				thrustDuration = 0.5
 				thrustShark(sharkPart, dirShark, turnPercentage, riseFallPercentage, thrustForce, thrustDuration)
-
-			else 
-				-- Turn around 
+			else
+				-- Turn around
 				thrustForce = 5000
 				turnPercentage = 1
 				riseFallPercentage = 1
